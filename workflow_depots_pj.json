@@ -1,0 +1,356 @@
+{
+  "name": "Dépôt PDFs Démarches Numériques → WebDAV via Grist",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [-48, -96],
+      "id": "f808e917-7be0-4044-a5c3-17d142a51c61",
+      "name": "Déclencher le workflow"
+    },
+    {
+      "parameters": {
+        "docId": "GRIST_DOC_ID",
+        "tableId": "GRIST_TABLE_ID",
+        "returnAll": true,
+        "additionalOptions": {}
+      },
+      "type": "n8n-nodes-base.grist",
+      "typeVersion": 1,
+      "position": [192, 0],
+      "id": "9f08f0e2-592a-435e-8bdb-c71ed98a834d",
+      "name": "Grist: Récupérer les dossiers",
+      "credentials": {
+        "gristApi": {
+          "id": "CREDENTIAL_ID_GRIST",
+          "name": "Votre compte de service Grist"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "175cf18e-bee9-4ceb-974e-87c107d92039",
+              "leftValue": "={{ $json.GRIST_FIELD_STATUT }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [432, 0],
+      "id": "cf343560-928c-40bb-a82d-f785b8b85f39",
+      "name": "Filtrer les dossiers éligibles"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [672, 0],
+      "id": "d3f2a3d8-1a91-4221-a6ea-53c601ecb63a",
+      "name": "Boucle sur les dossiers"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://demarche.numerique.gouv.fr/api/v2/graphql",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBearerAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"query\": \"{ dossier(number: {{ $json.GRIST_FIELD_DN_NUMBER }}) { number demandeur { ... on PersonnePhysique { nom prenom } } annotations { __typename ... on PieceJustificativeChamp { label files { filename url contentType } } ... on RepetitionChamp { label rows { champs { __typename ... on PieceJustificativeChamp { label files { filename url contentType } } } } } } champs { __typename ... on PieceJustificativeChamp { label files { filename url contentType } } ... on RepetitionChamp { label rows { champs { __typename ... on PieceJustificativeChamp { label files { filename url contentType } } } } } } } }\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [912, 0],
+      "id": "d4c390cc-6ec4-466a-b986-ee8e9feeaa44",
+      "name": "DS: Récupérer les PJ du dossier",
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "CREDENTIAL_ID_DS_TOKEN",
+          "name": "Votre token API Démarches Numériques"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "set-number",
+              "name": "numero",
+              "value": "={{ $json.data.dossier.number }}",
+              "type": "number"
+            },
+            {
+              "id": "set-nom",
+              "name": "nom",
+              "value": "={{ ($json.data.dossier.demandeur?.nom || 'INCONNU').trim().toUpperCase() }}",
+              "type": "string"
+            },
+            {
+              "id": "set-prenom",
+              "name": "prenom",
+              "value": "={{ ($json.data.dossier.demandeur?.prenom || 'inconnu').trim() }}",
+              "type": "string"
+            },
+            {
+              "id": "set-nomdossier",
+              "name": "nomDossier",
+              "value": "={{ ($json.data.dossier.number + '_' + ($json.data.dossier.demandeur?.nom || 'INCONNU').trim().toUpperCase() + '_' + ($json.data.dossier.demandeur?.prenom || 'inconnu').trim()).replace(/[\\s''']/g, '_') }}",
+              "type": "string"
+            },
+            {
+              "id": "set-recordid",
+              "name": "recordId",
+              "value": "={{ $('Boucle sur les dossiers').item.json.id }}",
+              "type": "string"
+            },
+            {
+              "id": "set-dossierdata",
+              "name": "dossierData",
+              "value": "={{ $json.data.dossier }}",
+              "type": "object"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [1152, 0],
+      "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "name": "Préparer le dossier"
+    },
+    {
+      "parameters": {
+        "method": "MKCOL",
+        "url": "=https://WEBDAV_HOST/remote.php/dav/files/WEBDAV_USER/WEBDAV_BASE_PATH/{{ encodeURIComponent($json.nomDossier) }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [1392, 0],
+      "id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+      "name": "MKCOL dossier",
+      "continueOnFail": true,
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "CREDENTIAL_ID_WEBDAV",
+          "name": "Votre credential WebDAV"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// ─── Helpers ─────────────────────────────────────────────────────────────────\n// Extrait récursivement toutes les PièceJustificativeChamp (y compris dans les RepetitionChamp)\nfunction extractFiles(fields) {\n  const files = [];\n  for (const field of fields) {\n    if (!field || !field.__typename) continue;\n    if (field.__typename === 'PieceJustificativeChamp' && field.files?.length > 0) {\n      for (const f of field.files) files.push({ ...f, label: field.label });\n    }\n    if (field.__typename === 'RepetitionChamp' && field.rows) {\n      for (const row of field.rows) {\n        if (row.champs) files.push(...extractFiles(row.champs));\n      }\n    }\n  }\n  return files;\n}\n\n// Dédoublonne par URL (même fichier sur plusieurs champs)\nfunction deduplicateByUrl(files) {\n  const seen = new Set();\n  return files.filter(f => {\n    if (seen.has(f.url)) return false;\n    seen.add(f.url);\n    return true;\n  });\n}\n\n// ─── Lecture des données préparées ────────────────────────────────────────────\n// $json = réponse du MKCOL → on remonte sur le Set node\nconst prepared  = $('Préparer le dossier').item.json;\nconst dossier   = prepared.dossierData;\nconst numero    = prepared.numero;\nconst nom       = prepared.nom;\nconst prenom    = prepared.prenom;\nconst nomDossier = prepared.nomDossier;\nconst recordId  = prepared.recordId;\n\nif (!dossier) return [];\n\nconst allFiles = deduplicateByUrl([\n  ...extractFiles(dossier.annotations || []),\n  ...extractFiles(dossier.champs || [])\n]);\n\nconst totalFiles = allFiles.length;\nif (totalFiles === 0) return [];\n\nconst results = [];\n\nfor (let i = 0; i < allFiles.length; i++) {\n  const file      = allFiles[i];\n  const fileIndex = i + 1;\n\n  // Nommage : numéro_dossier + index (si plusieurs fichiers) + nom original sanitisé\n  const safeName = file.filename.replace(/[^a-zA-Z0-9._-]/g, '_');\n  const filename = totalFiles === 1\n    ? `${numero}_${safeName}`\n    : `${numero}_${String(fileIndex).padStart(2, '0')}_${safeName}`;\n\n  const buf = await this.helpers.request({\n    method: 'GET',\n    url: file.url,\n    encoding: null\n  });\n\n  const binaryData = await this.helpers.prepareBinaryData(\n    buf,\n    filename,\n    file.contentType || 'application/pdf'\n  );\n\n  results.push({\n    json: {\n      recordId,\n      numero,\n      nom,\n      prenom,\n      filename,\n      nomDossier,\n      fileIndex,\n      totalFiles,\n      isLastFile: fileIndex === totalFiles\n    },\n    binary: { file1: binaryData }\n  });\n}\n\nreturn results;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1632, 0],
+      "id": "4e3df2e0-1f17-4a20-ba28-bb2bae61b382",
+      "name": "Download & prepare"
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "=https://WEBDAV_HOST/remote.php/dav/files/WEBDAV_USER/WEBDAV_BASE_PATH/{{ encodeURIComponent($json.nomDossier) }}/{{ encodeURIComponent($json.filename) }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendBody": true,
+        "contentType": "binaryData",
+        "inputDataFieldName": "file1",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [1872, 0],
+      "id": "11ec3379-4183-4d5a-90bd-dc00f7df9e4e",
+      "name": "PUT fichier vers WebDAV",
+      "credentials": {
+        "httpBasicAuth": {
+          "id": "CREDENTIAL_ID_WEBDAV",
+          "name": "Votre credential WebDAV"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "restore-recordid",
+              "name": "recordId",
+              "value": "={{ $('Download & prepare').item.json.recordId }}",
+              "type": "string"
+            },
+            {
+              "id": "restore-islast",
+              "name": "isLastFile",
+              "value": "={{ $('Download & prepare').item.json.isLastFile }}",
+              "type": "boolean"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [2112, 0],
+      "id": "d8514b86-6394-406b-b8d4-40ac85d42b61",
+      "name": "Restaurer les champs"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "check-last",
+              "leftValue": "={{ $json.isLastFile }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [2352, 0],
+      "id": "7556d197-cb94-4343-983f-9f7f21d207aa",
+      "name": "Dernier fichier du dossier ?"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "docId": "GRIST_DOC_ID",
+        "tableId": "GRIST_TABLE_ID",
+        "rowId": "={{ parseInt($json.recordId) }}",
+        "fieldsToSend": {
+          "properties": [
+            {
+              "fieldId": "GRIST_FIELD_STATUT",
+              "fieldValue": true
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.grist",
+      "typeVersion": 1,
+      "position": [2592, 80],
+      "id": "686d62b1-6a85-409e-b693-4e840d6b84a7",
+      "name": "Grist: Marquer comme déposé",
+      "credentials": {
+        "gristApi": {
+          "id": "CREDENTIAL_ID_GRIST",
+          "name": "Votre compte de service Grist"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Déclencher le workflow": {
+      "main": [[{ "node": "Grist: Récupérer les dossiers", "type": "main", "index": 0 }]]
+    },
+    "Grist: Récupérer les dossiers": {
+      "main": [[{ "node": "Filtrer les dossiers éligibles", "type": "main", "index": 0 }]]
+    },
+    "Filtrer les dossiers éligibles": {
+      "main": [
+        [{ "node": "Boucle sur les dossiers", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "Boucle sur les dossiers": {
+      "main": [
+        [],
+        [{ "node": "DS: Récupérer les PJ du dossier", "type": "main", "index": 0 }]
+      ]
+    },
+    "DS: Récupérer les PJ du dossier": {
+      "main": [[{ "node": "Préparer le dossier", "type": "main", "index": 0 }]]
+    },
+    "Préparer le dossier": {
+      "main": [[{ "node": "MKCOL dossier", "type": "main", "index": 0 }]]
+    },
+    "MKCOL dossier": {
+      "main": [[{ "node": "Download & prepare", "type": "main", "index": 0 }]]
+    },
+    "Download & prepare": {
+      "main": [[{ "node": "PUT fichier vers WebDAV", "type": "main", "index": 0 }]]
+    },
+    "PUT fichier vers WebDAV": {
+      "main": [[{ "node": "Restaurer les champs", "type": "main", "index": 0 }]]
+    },
+    "Restaurer les champs": {
+      "main": [[{ "node": "Dernier fichier du dossier ?", "type": "main", "index": 0 }]]
+    },
+    "Dernier fichier du dossier ?": {
+      "main": [
+        [{ "node": "Grist: Marquer comme déposé", "type": "main", "index": 0 }],
+        [{ "node": "Boucle sur les dossiers", "type": "main", "index": 0 }]
+      ]
+    },
+    "Grist: Marquer comme déposé": {
+      "main": [[{ "node": "Boucle sur les dossiers", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "41f66538-c564-4899-83ff-fd6dfa57b240",
+  "meta": {
+    "instanceId": "INSTANCE_ID"
+  },
+  "id": "ejFfcsc7LsNs7OB1",
+  "tags": []
+}
