@@ -11,7 +11,7 @@ Workflow n8n pour récupérer automatiquement les pièces jointes d'une démarch
 | Service | Rôle | Accès |
 |---|---|---|
 | [Démarches Numériques](https://demarche.numerique.gouv.fr) | Source des dossiers, PJ usagers, annotations et PJ instructeurs | API GraphQL · token Bearer |
-| [One Trick Pony](https://onetrickpony.app) | Synchronisation automatique Démarches Numériques → Grist (import des dossiers dans la base) | — |
+| [One Trick Pony](https://beta.gouv.fr/startups/one-trick-pony.html) | Synchronisation automatique Démarches Numériques → Grist (import des dossiers dans la base) | — |
 | [Grist](https://grist.numerique.gouv.fr) | Base de pilotage : liste des dossiers, statut de traitement | API REST · compte de service |
 | [n8n](https://n8n.io) | Orchestration du workflow (self-hosted, queue mode) | — |
 | WebDAV (Nuage Éducation Nationale ou Nextcloud) | Stockage final des PDFs, organisés par dossier demandeur | Basic Auth · mot de passe d'application |
