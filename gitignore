@@ -1,0 +1,27 @@
+# Workflows contenant des données réelles (ne jamais pousser)
+*_prod.json
+*_real.json
+*_local.json
+
+# Fichiers d'environnement
+.env
+*.env
+
+# Fichiers temporaires macOS
+.DS_Store
+.AppleDouble
+.LSOverrideDirectory
+
+# Fichiers temporaires Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Logs
+*.log
+
+# Éditeurs
+.vscode/
+.idea/
+*.swp
+*.swo
